@@ -1,20 +1,21 @@
-use std::sync::Arc;
-
-use sqlx::{PgPool, Row};
-
 use axum::{
     async_trait,
     extract::{Query, RequestParts},
     Extension, TypedHeader,
 };
 use headers::{authorization::Bearer, Authorization};
+use serde::{Deserialize, Serialize};
+use sqlx::{PgPool, Row};
+use std::sync::Arc;
+use uuid::Uuid;
+
+use schemars::{schema::Schema, schema_for_value, JsonSchema};
+
 use okapi::openapi3::{SecurityRequirement, SecurityScheme, SecuritySchemeData};
 use openapi_rs::{
     gen::OpenApiGenerator,
     request::{OpenApiFromRequest, RequestHeaderInput},
 };
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
 
 use super::auth::jwt_auth;
 
@@ -24,8 +25,8 @@ pub struct BasicAuth {
     client_secret: Option<String>,
 }
 
-#[derive(Serialize, Default, Deserialize, JsonSchema)]
-pub struct AuthToken(pub String, pub String);
+#[derive(Default, Serialize, Deserialize)]
+pub struct AuthToken(pub Uuid, pub String, pub String, pub String);
 
 #[async_trait]
 impl<T> axum::extract::FromRequest<T> for AuthToken
@@ -35,14 +36,13 @@ where
     type Rejection = String;
 
     async fn from_request(req: &mut RequestParts<T>) -> Result<Self, Self::Rejection> {
-        let query: Query<BasicAuth> =
-            Query::<BasicAuth>::from_request(req).await.map_err(|e| {
-                let ret = serde_json::json!({
-                    "code": 404,
-                    "body": format!("{:?}", e),
-                });
-                ret.to_string()
-            })?;
+        let query: Query<BasicAuth> = Query::<BasicAuth>::from_request(req).await.map_err(|e| {
+            let ret = serde_json::json!({
+                "code": 404,
+                "body": format!("{:?}", e),
+            });
+            ret.to_string()
+        })?;
 
         match (&query.client_id, &query.client_secret) {
             (Some(client_id), Some(client_secret)) => {
@@ -56,7 +56,7 @@ where
                     })?;
 
                 let user = sqlx::query(&format!(
-                    "SELECT * FROM generated_keys WHERE client_id = '{}' AND client_secret = '{}'",
+                    "SELECT * FROM users WHERE client_id = '{}' AND client_secret = '{}'",
                     client_id, client_secret
                 ))
                 .fetch_one(&**pool)
@@ -69,7 +69,21 @@ where
                     ret.to_string()
                 })?;
 
-                let user_id = user.try_get::<String, &str>("user_id").map_err(|e| {
+                let user_id = user.try_get::<Uuid, &str>("id").map_err(|e| {
+                    let ret = serde_json::json!({
+                        "code": 404,
+                        "body": format!("{:?}", e),
+                    });
+                    ret.to_string()
+                })?;
+                let name = user.try_get::<String, &str>("name").map_err(|e| {
+                    let ret = serde_json::json!({
+                        "code": 404,
+                        "body": format!("{:?}", e),
+                    });
+                    ret.to_string()
+                })?;
+                let email = user.try_get::<String, &str>("email").map_err(|e| {
                     let ret = serde_json::json!({
                         "code": 404,
                         "body": format!("{:?}", e),
@@ -84,7 +98,7 @@ where
                     ret.to_string()
                 })?;
 
-                Ok(AuthToken(user_id, role))
+                Ok(AuthToken(user_id, name, email, role))
             }
             _ => {
                 let cookies = TypedHeader::<Authorization<Bearer>>::from_request(req)
@@ -105,7 +119,7 @@ where
                         });
                         ret.to_string()
                     })
-                    .map(|(user_id, role)| AuthToken(user_id, role))
+                    .map(|(user_id, name, email, role)| AuthToken(user_id, name, email, role))
             }
         }
     }
@@ -146,5 +160,16 @@ where
             security_scheme,
             security_req,
         ))
+    }
+}
+
+impl JsonSchema for AuthToken {
+    fn schema_name() -> String {
+        "AuthToken".into()
+    }
+
+    fn json_schema(_: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        let root_schema = schema_for_value!(AuthToken::default());
+        Schema::Object(root_schema.schema)
     }
 }

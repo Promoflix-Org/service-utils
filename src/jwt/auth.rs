@@ -11,13 +11,16 @@ use serde::Serialize;
 use std::fmt;
 use std::ops::Add;
 use std::str::FromStr;
+use uuid::Uuid;
 
-use crate::server::grpc::check_token;
+// use crate::server::grpc::check_token;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
-    pub sub: String,
-    pub company: String,
+    pub sub: Uuid,
+    pub name: String,
+    pub email: String,
+    pub role: String,
     pub exp: usize,
 }
 
@@ -31,22 +34,26 @@ fn gen_jwt(claims: &Claims) -> String {
     let token = encode(
         &Header::default(),
         &claims,
-        &EncodingKey::from_secret("secret".as_ref()),
+        &EncodingKey::from_secret("promoflix".as_ref()),
     );
-    token.unwrap()
+    token.map_or("".to_string(), |f| f)
 }
 
-pub fn create_token(user_id: &String) -> Token {
+pub fn create_token(user_id: &Uuid, name: &String, email: &String, role: &String) -> Token {
     let acc_claims = Claims {
-        company: "company".to_string(),
+        sub: user_id.to_owned(),
+        name: name.to_string(),
+        email: email.to_string(),
+        role: role.to_string(),
         exp: chrono::Utc::now().add(Duration::days(7)).timestamp() as usize,
-        sub: user_id.to_string(),
     };
 
     let ref_claims = Claims {
-        company: "company".to_string(),
+        sub: user_id.to_owned(),
+        name: "".to_string(),
+        email: "".to_string(),
+        role: "".to_string(),
         exp: chrono::Utc::now().add(Duration::days(30)).timestamp() as usize,
-        sub: user_id.to_string(),
     };
 
     let access_token = gen_jwt(&acc_claims);
@@ -59,47 +66,71 @@ pub fn create_token(user_id: &String) -> Token {
 
 pub async fn jwt_auth(
     TypedHeader(cookies): TypedHeader<Authorization<Bearer>>,
-) -> Result<(String, String), Error> {
+) -> Result<(Uuid, String, String, String), Error> {
     let token = cookies.0.token();
     let mut validation = Validation::default();
     validation.validate_exp = true;
-    let token_data = decode::<Claims>(&token, &DecodingKey::from_secret(b"secret"), &validation)
+    let token_data = decode::<Claims>(&token, &DecodingKey::from_secret(b"promoflix"), &validation)
         .map_err(|e| match *e.kind() {
             ErrorKind::InvalidToken => anyhow::anyhow!("Token is invalid"),
             ErrorKind::InvalidIssuer => anyhow::anyhow!("Issuer is invalid"),
+            ErrorKind::ExpiredSignature => anyhow::anyhow!("Token expired"),
             _ => anyhow::anyhow!("Some other errors"),
         })?;
 
-    let user_id: &str = &token_data.claims.sub[..];
-    if user_id.is_empty() {
-        Err(Error::msg("User id is empty".to_string()))
-    } else {
-        match check_token(&user_id.to_string(), &token.to_string()).await {
-            Ok(res) => Ok((user_id.to_string(), res.role)),
-            Err(e) => Err(e),
-        }
+    let user_id = &token_data.claims.sub;
+    let name = &token_data.claims.name;
+    let email = &token_data.claims.email;
+    let role = &token_data.claims.role;
+    if name.is_empty() {
+        return Err(Error::msg("Name is empty".to_string()));
     }
+    if email.is_empty() {
+        return Err(Error::msg("Email is empty".to_string()));
+    }
+    if role.is_empty() {
+        return Err(Error::msg("Role is empty".to_string()));
+    }
+
+    Ok((
+        user_id.to_owned(),
+        name.to_string(),
+        email.to_string(),
+        role.to_string(),
+    ))
 }
 
-pub async fn jwt_str_auth(token: &String) -> Result<(String, String), Error> {
+pub async fn jwt_str_auth(token: &String) -> Result<(Uuid, String, String, String), Error> {
     let mut validation = Validation::default();
     validation.validate_exp = true;
-    let token_data = decode::<Claims>(&token, &DecodingKey::from_secret(b"secret"), &validation)
+    let token_data = decode::<Claims>(&token, &DecodingKey::from_secret(b"promoflix"), &validation)
         .map_err(|e| match *e.kind() {
             ErrorKind::InvalidToken => anyhow::anyhow!("Token is invalid"),
             ErrorKind::InvalidIssuer => anyhow::anyhow!("Issuer is invalid"),
+            ErrorKind::ExpiredSignature => anyhow::anyhow!("Token expired"),
             _ => anyhow::anyhow!("Some other errors"),
         })?;
 
-    let user_id: &str = &token_data.claims.sub[..];
-    if user_id.is_empty() {
-        Err(Error::msg("User id is empty".to_string()))
-    } else {
-        match check_token(&user_id.to_string(), &token.to_string()).await {
-            Ok(res) => Ok((user_id.to_string(), res.role)),
-            Err(e) => Err(e),
-        }
+    let user_id = &token_data.claims.sub;
+    let name = &token_data.claims.name;
+    let email = &token_data.claims.email;
+    let role = &token_data.claims.role;
+    if name.is_empty() {
+        return Err(Error::msg("Name is empty".to_string()));
     }
+    if email.is_empty() {
+        return Err(Error::msg("Email is empty".to_string()));
+    }
+    if role.is_empty() {
+        return Err(Error::msg("Role is empty".to_string()));
+    }
+
+    Ok((
+        user_id.to_owned(),
+        name.to_string(),
+        email.to_string(),
+        role.to_string(),
+    ))
 }
 
 #[derive(Debug, Clone, JsonSchema, PartialEq, Serialize, Deserialize)]
