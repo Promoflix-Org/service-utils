@@ -18,7 +18,6 @@ use uuid::Uuid;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
     pub sub: Uuid,
-    pub name: String,
     pub email: String,
     pub role: String,
     pub exp: usize,
@@ -39,10 +38,9 @@ fn gen_jwt(claims: &Claims) -> String {
     token.map_or("".to_string(), |f| f)
 }
 
-pub fn create_token(user_id: &Uuid, name: &String, email: &String, role: &String) -> Token {
+pub fn create_token(user_id: &Uuid, email: &String, role: &String) -> Token {
     let acc_claims = Claims {
         sub: user_id.to_owned(),
-        name: name.to_string(),
         email: email.to_string(),
         role: role.to_string(),
         exp: chrono::Utc::now().add(Duration::days(7)).timestamp() as usize,
@@ -50,7 +48,6 @@ pub fn create_token(user_id: &Uuid, name: &String, email: &String, role: &String
 
     let ref_claims = Claims {
         sub: user_id.to_owned(),
-        name: "".to_string(),
         email: "".to_string(),
         role: "".to_string(),
         exp: chrono::Utc::now().add(Duration::days(30)).timestamp() as usize,
@@ -66,7 +63,7 @@ pub fn create_token(user_id: &Uuid, name: &String, email: &String, role: &String
 
 pub async fn jwt_auth(
     TypedHeader(cookies): TypedHeader<Authorization<Bearer>>,
-) -> Result<(Uuid, String, String, String), Error> {
+) -> Result<(Uuid, String, String), Error> {
     let token = cookies.0.token();
     let mut validation = Validation::default();
     validation.validate_exp = true;
@@ -79,12 +76,8 @@ pub async fn jwt_auth(
         })?;
 
     let user_id = &token_data.claims.sub;
-    let name = &token_data.claims.name;
     let email = &token_data.claims.email;
     let role = &token_data.claims.role;
-    if name.is_empty() {
-        return Err(Error::msg("Name is empty".to_string()));
-    }
     if email.is_empty() {
         return Err(Error::msg("Email is empty".to_string()));
     }
@@ -92,15 +85,10 @@ pub async fn jwt_auth(
         return Err(Error::msg("Role is empty".to_string()));
     }
 
-    Ok((
-        user_id.to_owned(),
-        name.to_string(),
-        email.to_string(),
-        role.to_string(),
-    ))
+    Ok((user_id.to_owned(), email.to_string(), role.to_string()))
 }
 
-pub async fn jwt_str_auth(token: &String) -> Result<(Uuid, String, String, String), Error> {
+pub async fn jwt_str_auth(token: &String) -> Result<(Uuid, String, String), Error> {
     let mut validation = Validation::default();
     validation.validate_exp = true;
     let token_data = decode::<Claims>(&token, &DecodingKey::from_secret(b"promoflix"), &validation)
@@ -112,12 +100,8 @@ pub async fn jwt_str_auth(token: &String) -> Result<(Uuid, String, String, Strin
         })?;
 
     let user_id = &token_data.claims.sub;
-    let name = &token_data.claims.name;
     let email = &token_data.claims.email;
     let role = &token_data.claims.role;
-    if name.is_empty() {
-        return Err(Error::msg("Name is empty".to_string()));
-    }
     if email.is_empty() {
         return Err(Error::msg("Email is empty".to_string()));
     }
@@ -125,12 +109,7 @@ pub async fn jwt_str_auth(token: &String) -> Result<(Uuid, String, String, Strin
         return Err(Error::msg("Role is empty".to_string()));
     }
 
-    Ok((
-        user_id.to_owned(),
-        name.to_string(),
-        email.to_string(),
-        role.to_string(),
-    ))
+    Ok((user_id.to_owned(), email.to_string(), role.to_string()))
 }
 
 #[derive(Debug, Clone, JsonSchema, PartialEq, Serialize, Deserialize)]

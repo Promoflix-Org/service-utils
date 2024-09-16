@@ -26,7 +26,7 @@ pub struct BasicAuth {
 }
 
 #[derive(Default, Serialize, Deserialize)]
-pub struct AuthToken(pub Uuid, pub String, pub String, pub String);
+pub struct AuthToken(pub Uuid, pub String, pub String);
 
 #[async_trait]
 impl<T> axum::extract::FromRequest<T> for AuthToken
@@ -76,13 +76,6 @@ where
                     });
                     ret.to_string()
                 })?;
-                let name = user.try_get::<String, &str>("name").map_err(|e| {
-                    let ret = serde_json::json!({
-                        "code": 404,
-                        "body": format!("{:?}", e),
-                    });
-                    ret.to_string()
-                })?;
                 let email = user.try_get::<String, &str>("email").map_err(|e| {
                     let ret = serde_json::json!({
                         "code": 404,
@@ -98,7 +91,7 @@ where
                     ret.to_string()
                 })?;
 
-                Ok(AuthToken(user_id, name, email, role))
+                Ok(AuthToken(user_id, email, role))
             }
             _ => {
                 let cookies = TypedHeader::<Authorization<Bearer>>::from_request(req)
@@ -119,7 +112,7 @@ where
                         });
                         ret.to_string()
                     })
-                    .map(|(user_id, name, email, role)| AuthToken(user_id, name, email, role))
+                    .map(|(user_id, email, role)| AuthToken(user_id, email, role))
             }
         }
     }
