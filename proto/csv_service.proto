@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package csv_service;
+
+service CsvService {
+    rpc get_csv(GetCsv) returns (ResCsv) {}
+}
+
+message GetCsv {
+    string instance_id = 1;
+}
+
+message Rows { 
+    repeated string rows = 1;    
+}
+
+message ResCsv {
+    string instance_id = 1;
+    repeated string headers = 2;
+    repeated Rows records = 3;
+    
+}

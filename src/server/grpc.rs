@@ -1,13 +1,19 @@
 use anyhow::*;
 use tonic::transport::Endpoint;
+use uuid::Uuid;
 
 pub mod auth_service {
     tonic::include_proto!("auth_service");
 }
+pub mod csv_service {
+    tonic::include_proto!("csv_service");
+}
 
 use auth_service::{auth_service_client::AuthServiceClient, CheckTokenRequest, CheckTokenResponse};
+use csv_service::{csv_service_client::CsvServiceClient, GetCsv, ResCsv};
 
 use crate::AUTH_SERVICE_URL;
+use crate::CSV_SERVICE_URL;
 
 pub async fn check_token(
     user_id: &String,
@@ -25,6 +31,26 @@ pub async fn check_token(
         })
         .await
         .context("Unable to send check_token request")?;
+
+    let message = res.into_inner();
+
+    println!("{:?}", message);
+
+    Ok(message)
+}
+
+pub async fn get_csv(instance_id: &Uuid) -> Result<ResCsv, Error> {
+    lazy_static::initialize(&CSV_SERVICE_URL);
+    let endpoint: Endpoint = CSV_SERVICE_URL.parse().context("Invalid endpoint")?;
+    let mut grpc = CsvServiceClient::connect(endpoint)
+        .await
+        .context("Unable to establish connection with csv service")?;
+    let res = grpc
+        .get_csv(GetCsv {
+            instance_id: instance_id.to_string(),
+        })
+        .await
+        .context("Unable to send get_csv request")?;
 
     let message = res.into_inner();
 

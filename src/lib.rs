@@ -14,4 +14,5 @@ fn ensure_var<K: AsRef<OsStr>>(key: K) -> anyhow::Result<String> {
 
 lazy_static! {
     static ref AUTH_SERVICE_URL: String = ensure_var("AUTH_SERVICE_URL").unwrap();
+    static ref CSV_SERVICE_URL: String = ensure_var("CSV_SERVICE_URL").unwrap();    
 }
